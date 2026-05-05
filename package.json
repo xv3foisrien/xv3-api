@@ -1,0 +1,13 @@
+{
+  "name": "xv3foisrien-api",
+  "version": "1.0.0",
+  "description": "Backend API XV3foisrien — Stripe + Resend",
+  "private": true,
+  "dependencies": {
+    "stripe": "^14.21.0",
+    "resend": "^3.2.0"
+  },
+  "engines": {
+    "node": "20.x"
+  }
+}

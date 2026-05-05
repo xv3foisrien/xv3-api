@@ -1,4 +1,4 @@
-// ════════════════════════════════════════
+/// ════════════════════════════════════════
 // XV3FOISRIEN — /api/webhook
 // Reçoit les événements Stripe en POST.
 // Valide la signature avec STRIPE_WEBHOOK_SECRET.
@@ -16,7 +16,8 @@ const { Resend } = require('resend');
 
 // Vercel bufferise le body — on a besoin du raw buffer pour
 // vérifier la signature Stripe (OBLIGATOIRE).
-export const config = { api: { bodyParser: false } };
+// Désactive le bodyParser Vercel pour lire le raw body (requis par Stripe)
+module.exports.config = { api: { bodyParser: false } };
 
 function getRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -167,7 +168,28 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // ── 4. Notifier l'artisan ─────────────────────────────────
+    // ── 4. Marquer les bijoux épuisés sur le serveur ──────────
+    // Visible immédiatement sur mobile ET desktop
+    try {
+      const soldIds = items.map(i => i.id);
+      const dataRes = await fetch('https://xv3foisrien.com/save-data.php');
+      const currentData = await dataRes.json();
+      let produits = currentData.produits || null;
+      if (produits && produits.length > 0) {
+        produits = produits.map(p =>
+          soldIds.includes(p.id) ? { ...p, epuise: true } : p
+        );
+        await fetch('https://xv3foisrien.com/save-data.php', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Key': 'xv3_secret_2026_changez_moi' },
+          body: JSON.stringify({ produits, settings: currentData.settings || null, categories: currentData.categories || null }),
+        });
+      }
+    } catch (stockErr) {
+      console.error('[webhook] Stock update error:', stockErr.message);
+    }
+
+    // ── 5. Notifier l'artisan ─────────────────────────────────
     try {
       await resend.emails.send({
         from:    'XV3foisrien Bot <commandes@xv3foisrien.com>',
@@ -187,4 +209,5 @@ module.exports = async function handler(req, res) {
 
   // ── 5. Répondre 200 à Stripe (obligatoire) ──────────────────
   return res.status(200).json({ received: true });
+};
 };

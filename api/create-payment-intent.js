@@ -1,4 +1,3 @@
-
 // ════════════════════════════════════════
 // XV3FOISRIEN — /api/create-payment-intent
 // Crée un PaymentIntent Stripe et retourne
@@ -63,3 +62,4 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 };
+

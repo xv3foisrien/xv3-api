@@ -7,10 +7,13 @@
 const Stripe = require('stripe');
 
 module.exports = async function handler(req, res) {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin',  'https://xv3foisrien.com');
+  // CORS — accepter avec et sans www
+  const allowed = ['https://xv3foisrien.com', 'https://www.xv3foisrien.com'];
+  const origin  = req.headers.origin || '';
+  res.setHeader('Access-Control-Allow-Origin',  allowed.includes(origin) ? origin : allowed[0]);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Vary', 'Origin');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST')   return res.status(405).json({ error: 'Méthode non autorisée' });
@@ -62,4 +65,3 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 };
-

@@ -1,4 +1,4 @@
-/// ════════════════════════════════════════
+// ════════════════════════════════════════
 // XV3FOISRIEN — /api/webhook
 // Reçoit les événements Stripe en POST.
 // Valide la signature avec STRIPE_WEBHOOK_SECRET.
@@ -172,18 +172,34 @@ module.exports = async function handler(req, res) {
     // Visible immédiatement sur mobile ET desktop
     try {
       const soldIds = items.map(i => i.id);
-      const dataRes = await fetch('https://xv3foisrien.com/save-data.php');
+
+      // Lire data.json avec Origin header pour passer le CORS d'OVH
+      const dataRes = await fetch('https://xv3foisrien.com/save-data.php', {
+        headers: { 'Origin': 'https://xv3foisrien.com' }
+      });
+      if (!dataRes.ok) throw new Error('GET save-data HTTP ' + dataRes.status);
       const currentData = await dataRes.json();
       let produits = currentData.produits || null;
+
       if (produits && produits.length > 0) {
         produits = produits.map(p =>
           soldIds.includes(p.id) ? { ...p, epuise: true } : p
         );
-        await fetch('https://xv3foisrien.com/save-data.php', {
+        const saveRes = await fetch('https://xv3foisrien.com/save-data.php', {
           method:  'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Admin-Key': 'xv3_secret_2026_changez_moi' },
-          body: JSON.stringify({ produits, settings: currentData.settings || null, categories: currentData.categories || null }),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Key':  'xv3_secret_2026_changez_moi',
+            'Origin':       'https://xv3foisrien.com',
+          },
+          body: JSON.stringify({
+            produits,
+            settings:   currentData.settings   || null,
+            categories: currentData.categories || null,
+          }),
         });
+        if (!saveRes.ok) throw new Error('POST save-data HTTP ' + saveRes.status);
+        console.log('[webhook] Stock mis à jour pour:', soldIds.join(', '));
       }
     } catch (stockErr) {
       console.error('[webhook] Stock update error:', stockErr.message);
@@ -209,5 +225,4 @@ module.exports = async function handler(req, res) {
 
   // ── 5. Répondre 200 à Stripe (obligatoire) ──────────────────
   return res.status(200).json({ received: true });
-};
 };

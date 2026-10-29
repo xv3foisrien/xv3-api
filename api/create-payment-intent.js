@@ -1,5 +1,5 @@
 // ════════════════════════════════════════
-// XV3FOISRIEN — /api/create-payment-intent
+// LOUISE RINCEAU — /api/create-payment-intent
 // Crée un PaymentIntent Stripe et retourne
 // le clientSecret au frontend.
 // ════════════════════════════════════════
@@ -7,8 +7,11 @@
 const Stripe = require('stripe');
 
 module.exports = async function handler(req, res) {
-  // CORS — accepter avec et sans www
-  const allowed = ['https://xv3foisrien.com', 'https://www.xv3foisrien.com'];
+  // CORS — on autorise le nouveau domaine ET l'ancien (transition)
+  const allowed = [
+    'https://louiserinceau.com', 'https://www.louiserinceau.com',
+    'https://xv3foisrien.com',   'https://www.xv3foisrien.com',
+  ];
   const origin  = req.headers.origin || '';
   res.setHeader('Access-Control-Allow-Origin',  allowed.includes(origin) ? origin : allowed[0]);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -35,8 +38,8 @@ module.exports = async function handler(req, res) {
     const paymentIntent = await stripe.paymentIntents.create({
       amount:      Math.round(total * 100),  // en centimes
       currency:    'eur',
-      description: 'xv3foisrien — ' + description,
-      statement_descriptor_suffix: 'XV3FOISRIEN', // libellé sur relevé bancaire (max 22 car.)
+      description: 'Louise Rinceau — ' + description,
+      statement_descriptor_suffix: 'LOUISERINCEAU', // libellé sur relevé bancaire (max 22 car.)
       receipt_email: email,
       metadata: {
         client_nom:    nom,
@@ -53,7 +56,7 @@ module.exports = async function handler(req, res) {
         subtotal:  String(subtotal),
         shipping:  String(shipping || 0),
         total:     String(total),
-        source:    'xv3foisrien.com',
+        source:    'louiserinceau.com',
       },
       automatic_payment_methods: { enabled: true },
     });

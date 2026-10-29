@@ -1,11 +1,11 @@
 // ════════════════════════════════════════
-// XV3FOISRIEN — /api/webhook
+// LOUISE RINCEAU — /api/webhook
 // Reçoit les événements Stripe en POST.
 // Valide la signature avec STRIPE_WEBHOOK_SECRET.
 // Déclenche l'email de confirmation via Resend.
 //
 // URL à coller dans Stripe Dashboard → Webhooks :
-//   https://xv3-api.vercel.app/api/webhook
+//   https://xv3-api-z22c.vercel.app/api/webhook
 //
 // Événements à écouter :
 //   payment_intent.succeeded
@@ -16,7 +16,6 @@ const { Resend } = require('resend');
 
 // Vercel bufferise le body — on a besoin du raw buffer pour
 // vérifier la signature Stripe (OBLIGATOIRE).
-// Désactive le bodyParser Vercel pour lire le raw body (requis par Stripe)
 module.exports.config = { api: { bodyParser: false } };
 
 function getRawBody(req) {
@@ -31,8 +30,8 @@ function getRawBody(req) {
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end('Method Not Allowed');
 
-  const stripe       = Stripe(process.env.STRIPE_SECRET_KEY);
-  const resend       = new Resend(process.env.RESEND_API_KEY);
+  const stripe        = Stripe(process.env.STRIPE_SECRET_KEY);
+  const resend        = new Resend(process.env.RESEND_API_KEY);
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   // ── 1. Lire le body brut & vérifier la signature ────────────
@@ -61,88 +60,91 @@ module.exports = async function handler(req, res) {
     let items = [];
     try { items = JSON.parse(meta.items_json || '[]'); } catch (e) {}
 
+    const serif = "Georgia,'Times New Roman',serif";
+
     const itemsHtml = items.map(i => `
       <tr>
-        <td style="padding:8px 0;border-bottom:1px solid #eee;font-size:14px">${i.nom}${i.taille ? ' — Taille ' + i.taille : ''}</td>
-        <td style="padding:8px 0;border-bottom:1px solid #eee;font-size:14px;text-align:right;font-weight:600">${i.prix},00 €</td>
+        <td style="padding:10px 0;border-bottom:1px solid #E7E5E2;font-size:14px;color:#55504C">${i.nom}${i.taille ? ' — Taille ' + i.taille : ''}</td>
+        <td style="padding:10px 0;border-bottom:1px solid #E7E5E2;font-size:14px;text-align:right;font-family:${serif};color:#141312">${i.prix},00 €</td>
       </tr>`).join('');
 
     const emailHtml = `
 <!DOCTYPE html>
 <html lang="fr">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f5f5f4;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f4;padding:40px 20px">
+<body style="margin:0;padding:0;background:#FBFBFA;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#141312">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#FBFBFA;padding:40px 20px">
   <tr><td align="center">
-    <table width="100%" style="max-width:520px;background:#ffffff;border:1.5px solid #080808">
+    <table width="100%" style="max-width:540px;background:#ffffff;border:1px solid #E7E5E2">
 
       <!-- Header -->
       <tr>
-        <td style="background:#080808;padding:28px 32px">
-          <p style="margin:0;font-size:22px;font-weight:900;letter-spacing:.18em;text-transform:uppercase;color:#ffffff">XV3foisrien</p>
-          <p style="margin:4px 0 0;font-size:10px;font-weight:700;letter-spacing:.25em;text-transform:uppercase;color:rgba(255,255,255,.35)">Bijoux artisanaux · Marseille</p>
+        <td align="center" style="padding:34px 32px 26px;border-bottom:1px solid #E7E5E2">
+          <img src="https://louiserinceau.com/images/logo-louise-rinceau.png" alt="Louise Rinceau" height="48" style="display:block;height:48px;width:auto;margin:0 auto 12px">
+          <p style="margin:0;font-family:${serif};font-size:20px;font-weight:400;letter-spacing:.3em;text-transform:uppercase;color:#141312">Louise&nbsp;Rinceau</p>
+          <p style="margin:8px 0 0;font-family:${serif};font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:#8A847F">Bijoux faits main · Marseille</p>
         </td>
       </tr>
 
       <!-- Body -->
       <tr>
-        <td style="padding:32px 32px 24px">
-          <p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:#888">Confirmation de commande</p>
-          <h1 style="margin:0 0 24px;font-size:26px;font-weight:900;text-transform:uppercase;letter-spacing:-.02em;color:#080808;line-height:1.1">Merci,<br>${nom} ✦</h1>
-          <p style="margin:0 0 24px;font-size:14px;font-weight:300;line-height:1.75;color:#444">
+        <td style="padding:34px 34px 26px">
+          <p style="margin:0 0 10px;font-family:${serif};font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#8A847F">Confirmation de commande</p>
+          <h1 style="margin:0 0 22px;font-family:${serif};font-size:28px;font-weight:400;letter-spacing:.02em;color:#141312;line-height:1.15">Merci, ${nom} ✦</h1>
+          <p style="margin:0 0 26px;font-size:14px;font-weight:300;line-height:1.8;color:#55504C">
             Votre paiement a bien été reçu. Votre bijou est en cours de préparation dans notre atelier à Marseille.
             Vous recevrez un email dès l'expédition.
           </p>
 
           <!-- Articles -->
-          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px">
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:18px">
             <tr>
-              <td colspan="2" style="font-size:10px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:#888;padding-bottom:8px;border-bottom:1.5px solid #080808">Votre commande</td>
+              <td colspan="2" style="font-family:${serif};font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#8A847F;padding-bottom:10px;border-bottom:1px solid #141312">Votre commande</td>
             </tr>
             ${itemsHtml}
             ${parseFloat(shipping) > 0 ? `
             <tr>
-              <td style="padding:8px 0;border-bottom:1px solid #eee;font-size:13px;color:#666">Livraison</td>
-              <td style="padding:8px 0;border-bottom:1px solid #eee;font-size:13px;text-align:right;color:#666">${shipping} €</td>
+              <td style="padding:10px 0;border-bottom:1px solid #E7E5E2;font-size:13px;color:#55504C">Livraison</td>
+              <td style="padding:10px 0;border-bottom:1px solid #E7E5E2;font-size:13px;text-align:right;color:#55504C">${shipping} €</td>
             </tr>` : `
             <tr>
-              <td style="padding:8px 0;border-bottom:1px solid #eee;font-size:13px;color:#2a7a2a">✓ Livraison offerte</td>
-              <td style="padding:8px 0;border-bottom:1px solid #eee;font-size:13px;text-align:right;color:#2a7a2a">0,00 €</td>
+              <td style="padding:10px 0;border-bottom:1px solid #E7E5E2;font-size:13px;color:#1a7a36">✓ Livraison offerte</td>
+              <td style="padding:10px 0;border-bottom:1px solid #E7E5E2;font-size:13px;text-align:right;color:#1a7a36">0,00 €</td>
             </tr>`}
             <tr>
-              <td style="padding:12px 0 0;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em">Total payé</td>
-              <td style="padding:12px 0 0;font-size:18px;font-weight:900;text-align:right">${total} €</td>
+              <td style="padding:14px 0 0;font-family:${serif};font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#141312">Total payé</td>
+              <td style="padding:14px 0 0;font-family:${serif};font-size:18px;text-align:right;color:#141312">${total} €</td>
             </tr>
           </table>
 
           <!-- Adresse -->
-          <div style="background:#f5f5f4;padding:16px;margin-bottom:24px">
-            <p style="margin:0 0 4px;font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#888">Expédition vers</p>
-            <p style="margin:0;font-size:13px;font-weight:300;color:#444;line-height:1.6">${nom}<br>${adresse}</p>
+          <div style="background:#FBFBFA;border:1px solid #E7E5E2;padding:16px;margin-bottom:24px">
+            <p style="margin:0 0 6px;font-family:${serif};font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#8A847F">Expédition vers</p>
+            <p style="margin:0;font-size:13px;font-weight:300;color:#55504C;line-height:1.6">${nom}<br>${adresse}</p>
           </div>
 
           <!-- Délai -->
-          <div style="border-left:3px solid #080808;padding:12px 16px;margin-bottom:24px">
-            <p style="margin:0;font-size:13px;font-weight:300;color:#444;line-height:1.65">
-              <strong style="font-weight:700">Délai de livraison :</strong> 2–5 jours ouvrés.<br>
-              Chaque pièce est unique — faite main à Marseille à partir d'argenterie recyclée.
+          <div style="border-left:2px solid #141312;padding:12px 16px;margin-bottom:24px">
+            <p style="margin:0;font-size:13px;font-weight:300;color:#55504C;line-height:1.7">
+              <strong style="font-weight:600;color:#141312">Délai de préparation :</strong> 5 à 10 jours ouvrés avant expédition (variable selon les créations en cours).<br>
+              Chaque pièce est unique — faite main à Marseille à partir d'argenterie ancienne.
             </p>
           </div>
 
-          <p style="margin:0;font-size:13px;font-weight:300;line-height:1.75;color:#666">
+          <p style="margin:0;font-size:13px;font-weight:300;line-height:1.8;color:#55504C">
             Une question ? Écrivez-nous à
-            <a href="mailto:contact@xv3foisrien.com" style="color:#080808;font-weight:600">contact@xv3foisrien.com</a><br>
-            ou retrouvez-nous sur Instagram <a href="https://www.instagram.com/xv3foisrien" style="color:#080808;font-weight:600">@xv3foisrien</a>
+            <a href="mailto:contact@louiserinceau.com" style="color:#141312;font-weight:600;text-decoration:none;border-bottom:1px solid #8A847F">contact@louiserinceau.com</a><br>
+            ou retrouvez-nous sur Instagram <a href="https://www.instagram.com/louiserinceau" style="color:#141312;font-weight:600;text-decoration:none;border-bottom:1px solid #8A847F">@louiserinceau</a>
           </p>
         </td>
       </tr>
 
       <!-- Footer -->
       <tr>
-        <td style="background:#f5f5f4;padding:20px 32px;border-top:1px solid #eee">
-          <p style="margin:0;font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#aaa;text-align:center">
-            © 2026 XV3foisrien · Bijoux artisanaux · Argenterie recyclée<br>
-            Créé à Paris 18ème · Atelier à Marseille
+        <td style="background:#FBFBFA;padding:22px 32px;border-top:1px solid #E7E5E2">
+          <p style="margin:0;font-family:${serif};font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#8A847F;text-align:center;line-height:1.9">
+            © 2026 Louise Rinceau · Bijoux artisanaux · Argenterie ancienne<br>
+            17 rue du Petit Puits, 13002 Marseille
           </p>
         </td>
       </tr>
@@ -154,28 +156,32 @@ module.exports = async function handler(req, res) {
 </html>`;
 
     // ── 3. Envoyer l'email client via Resend ──────────────────
+    // ⚠️ L'adresse d'envoi doit être sur un domaine VÉRIFIÉ dans Resend.
+    //    Tant que louiserinceau.com n'est pas vérifié dans Resend, on
+    //    envoie depuis xv3foisrien.com (déjà vérifié) mais le nom affiché
+    //    est "Louise Rinceau". Une fois louiserinceau.com vérifié dans
+    //    Resend, remplace l'adresse par : Louise Rinceau <commandes@louiserinceau.com>
     if (email) {
       try {
         await resend.emails.send({
-          from:    'XV3foisrien <commandes@xv3foisrien.com>',
+          from:    'Louise Rinceau <commandes@xv3foisrien.com>',
           to:      email,
-          subject: '✦ Votre commande XV3foisrien est confirmée',
+          subject: '✦ Votre commande Louise Rinceau est confirmée',
           html:    emailHtml,
         });
       } catch (mailErr) {
-        // L'email échoue silencieusement — la commande est quand même validée
         console.error('[webhook] Resend error:', mailErr.message);
       }
     }
 
     // ── 4. Marquer les bijoux épuisés sur le serveur ──────────
-    // Visible immédiatement sur mobile ET desktop
+    // On pointe vers louiserinceau.com (évite la redirection 301 de
+    // xv3foisrien.com qui casserait le POST).
     try {
       const soldIds = items.map(i => i.id);
 
-      // Lire data.json avec Origin header pour passer le CORS d'OVH
-      const dataRes = await fetch('https://xv3foisrien.com/save-data.php', {
-        headers: { 'Origin': 'https://xv3foisrien.com' }
+      const dataRes = await fetch('https://louiserinceau.com/save-data.php', {
+        headers: { 'Origin': 'https://louiserinceau.com' }
       });
       if (!dataRes.ok) throw new Error('GET save-data HTTP ' + dataRes.status);
       const currentData = await dataRes.json();
@@ -185,12 +191,12 @@ module.exports = async function handler(req, res) {
         produits = produits.map(p =>
           soldIds.includes(p.id) ? { ...p, epuise: true } : p
         );
-        const saveRes = await fetch('https://xv3foisrien.com/save-data.php', {
+        const saveRes = await fetch('https://louiserinceau.com/save-data.php', {
           method:  'POST',
           headers: {
             'Content-Type': 'application/json',
             'X-Admin-Key':  'xv3_secret_2026_changez_moi',
-            'Origin':       'https://xv3foisrien.com',
+            'Origin':       'https://louiserinceau.com',
           },
           body: JSON.stringify({
             produits,
@@ -205,11 +211,11 @@ module.exports = async function handler(req, res) {
       console.error('[webhook] Stock update error:', stockErr.message);
     }
 
-    // ── 5. Notifier l'artisan ─────────────────────────────────
+    // ── 5. Notifier l'artisane ────────────────────────────────
     try {
       await resend.emails.send({
-        from:    'XV3foisrien Bot <commandes@xv3foisrien.com>',
-        to:      'contact@xv3foisrien.com',
+        from:    'Louise Rinceau Bot <commandes@xv3foisrien.com>',
+        to:      'contact@louiserinceau.com',
         subject: `🛒 Nouvelle commande — ${total} € — ${nom}`,
         html:    `<p><b>Nouvelle commande !</b></p>
                   <p><b>Client :</b> ${nom} (${email})</p>
@@ -219,10 +225,10 @@ module.exports = async function handler(req, res) {
                   <p><b>PaymentIntent :</b> ${pi.id}</p>`,
       });
     } catch (mailErr) {
-      console.error('[webhook] Notif artisan error:', mailErr.message);
+      console.error('[webhook] Notif artisane error:', mailErr.message);
     }
   }
 
-  // ── 5. Répondre 200 à Stripe (obligatoire) ──────────────────
+  // ── 6. Répondre 200 à Stripe (obligatoire) ──────────────────
   return res.status(200).json({ received: true });
 };

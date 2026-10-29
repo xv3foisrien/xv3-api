@@ -188,9 +188,14 @@ module.exports = async function handler(req, res) {
       let produits = currentData.produits || null;
 
       if (produits && produits.length > 0) {
-        produits = produits.map(p =>
-          soldIds.includes(p.id) ? { ...p, epuise: true } : p
-        );
+        produits = produits.map(p => {
+          if (!soldIds.includes(p.id)) return p;
+          // Les pièces AVEC stock sont décrémentées côté site (mark-sold.php) :
+          // on ne les touche pas ici pour éviter un double décompte.
+          if (p.stock !== undefined && p.stock !== null) return p;
+          // Pièces uniques (sans stock) : filet de sécurité → marquer épuisé.
+          return { ...p, epuise: true };
+        });
         const saveRes = await fetch('https://louiserinceau.com/save-data.php', {
           method:  'POST',
           headers: {

@@ -115,11 +115,11 @@ module.exports = async function handler(req, res) {
     </td></tr></table></td></tr></table></body></html>`;
 
     if (email) {
-      try { await resend.emails.send({ from: 'Louise Rinceau <commandes@xv3foisrien.com>', to: email, subject: '✦ Votre commande Louise Rinceau est confirmée', html }); } catch (e) {} // ⚠️ → louiserinceau.com quand vérifié
+      try { await resend.emails.send({ from: 'Louise Rinceau <commandes@louiserinceau.com>', to: email, subject: '✦ Votre commande Louise Rinceau est confirmée', html }); } catch (e) {}
     }
     try {
       await resend.emails.send({
-        from: 'Louise Rinceau Bot <commandes@xv3foisrien.com>', to: 'contact@louiserinceau.com', // ⚠️ → louiserinceau.com quand vérifié
+        from: 'Louise Rinceau Bot <commandes@louiserinceau.com>', to: 'contact@louiserinceau.com',
         subject: `🛒 Commande (carte cadeau) — ${realTotal.toFixed(2)} € — ${nom}`,
         html: `<p><b>Commande réglée par carte cadeau</b></p><p>Client : ${nom} (${email})<br>Adresse : ${adresse}, ${codePostal} ${ville}<br>Total : ${realTotal.toFixed(2)} €<br>Carte : ${giftCode}<br>Articles : ${items.map(i => (byId[i.id]?.nom || i.id) + (i.taille ? ' T.' + i.taille : '')).join(', ')}${commentaire ? '<br>Commentaire : ' + commentaire : ''}</p>`,
       });

@@ -27,6 +27,92 @@ function getRawBody(req) {
   });
 }
 
+const SITE      = 'https://louiserinceau.com';
+const ADMIN_KEY = 'xv3_secret_2026_changez_moi';
+
+// Génère un code cadeau lisible : LR-XXXX-XXXX (sans caractères ambigus)
+function genGiftCode() {
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans I,O,0,1
+  const pick = n => Array.from({ length: n }, () => A[Math.floor(Math.random() * A.length)]).join('');
+  return `LR-${pick(4)}-${pick(4)}`;
+}
+
+// Email de la carte cadeau envoyé à l'acheteur
+function giftCardEmailHtml(code, amount, message, buyerNom) {
+  const serif = "Georgia,'Times New Roman',serif";
+  return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#FBFBFA;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#141312">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#FBFBFA;padding:40px 20px"><tr><td align="center">
+  <table width="100%" style="max-width:540px;background:#ffffff;border:1px solid #E7E5E2">
+    <tr><td align="center" style="padding:34px 32px 20px;border-bottom:1px solid #E7E5E2">
+      <img src="${SITE}/images/logo-louise-rinceau.png" alt="Louise Rinceau" height="46" style="display:block;height:46px;width:auto;margin:0 auto 12px">
+      <p style="margin:0;font-family:${serif};font-size:20px;letter-spacing:.3em;text-transform:uppercase;color:#141312">Louise&nbsp;Rinceau</p>
+      <p style="margin:8px 0 0;font-family:${serif};font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:#8A847F">Carte cadeau · Bijoux faits main</p>
+    </td></tr>
+    <tr><td style="padding:34px 34px 10px;text-align:center">
+      <p style="margin:0 0 6px;font-family:${serif};font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#8A847F">Votre carte cadeau</p>
+      <h1 style="margin:0 0 18px;font-family:${serif};font-size:40px;font-weight:400;color:#141312">${amount}&nbsp;€</h1>
+      <div style="border:1px solid #141312;padding:16px;margin:0 auto 18px;max-width:320px">
+        <p style="margin:0 0 6px;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#8A847F">Code à utiliser au paiement</p>
+        <p style="margin:0;font-family:${serif};font-size:26px;letter-spacing:.12em;color:#141312">${code}</p>
+      </div>
+      ${message ? `<p style="margin:0 0 18px;font-size:14px;font-style:italic;color:#55504C;line-height:1.8">« ${message} »</p>` : ''}
+      <p style="margin:0 0 26px;font-size:14px;font-weight:300;line-height:1.8;color:#55504C">
+        Offrez cette carte à la personne de votre choix. Au moment de régler sur
+        <a href="${SITE}" style="color:#141312">louiserinceau.com</a>, il suffit de saisir le code dans le panier :
+        le montant se déduit automatiquement. Utilisable en plusieurs fois jusqu'à épuisement du solde.
+      </p>
+      <a href="${SITE}/tous-les-bijoux.html" style="display:inline-block;font-family:${serif};font-size:12px;letter-spacing:.2em;text-transform:uppercase;background:#141312;color:#fff;text-decoration:none;padding:14px 28px;margin-bottom:10px">Découvrir les bijoux</a>
+    </td></tr>
+    <tr><td style="background:#FBFBFA;padding:22px 32px;border-top:1px solid #E7E5E2">
+      <p style="margin:0;font-family:${serif};font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#8A847F;text-align:center;line-height:1.9">
+        © 2026 Louise Rinceau · Fait main à Marseille<br>17 rue du Petit Puits, 13002 Marseille · contact@louiserinceau.com
+      </p>
+    </td></tr>
+  </table>
+</td></tr></table></body></html>`;
+}
+
+// Traite l'achat d'une carte cadeau : crée le code, le stocke, envoie l'email.
+async function handleGiftCardPurchase(pi, meta, resend) {
+  const amount = parseInt(meta.gc_amount, 10) || Math.round(pi.amount / 100);
+  const email  = meta.client_email || pi.receipt_email || '';
+  const nom    = meta.client_nom || '';
+  const message = meta.gc_message || '';
+  const code   = genGiftCode();
+
+  // 1. Enregistrer la carte sur le serveur
+  try {
+    await fetch(SITE + '/gift-card.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': ADMIN_KEY },
+      body: JSON.stringify({ action: 'create', code, amount, buyer_email: email, message }),
+    });
+  } catch (e) { console.error('[webhook] gift create error:', e.message); }
+
+  // 2. Envoyer la carte à l'acheteur
+  if (email) {
+    try {
+      await resend.emails.send({
+        from:    'Louise Rinceau <commandes@xv3foisrien.com>', // ⚠️ → louiserinceau.com quand vérifié
+        to:      email,
+        subject: `🎁 Votre carte cadeau Louise Rinceau — ${amount} €`,
+        html:    giftCardEmailHtml(code, amount, message, nom),
+      });
+    } catch (e) { console.error('[webhook] gift email error:', e.message); }
+  }
+
+  // 3. Notifier l'artisane
+  try {
+    await resend.emails.send({
+      from:    'Louise Rinceau Bot <commandes@xv3foisrien.com>', // ⚠️ → louiserinceau.com quand vérifié
+      to:      'contact@louiserinceau.com',
+      subject: `🎁 Carte cadeau vendue — ${amount} € — ${code}`,
+      html:    `<p><b>Carte cadeau achetée</b></p><p>Montant : ${amount} €<br>Code : ${code}<br>Acheteur : ${nom} (${email})<br>PaymentIntent : ${pi.id}</p>`,
+    });
+  } catch (e) {}
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end('Method Not Allowed');
 
@@ -51,6 +137,13 @@ module.exports = async function handler(req, res) {
   if (event.type === 'payment_intent.succeeded') {
     const pi       = event.data.object;
     const meta     = pi.metadata || {};
+
+    // ── CARTE CADEAU achetée : générer le code + envoyer, puis terminer ──
+    if (meta.type === 'giftcard_purchase') {
+      await handleGiftCardPurchase(pi, meta, resend);
+      return res.status(200).json({ received: true });
+    }
+
     const email    = meta.client_email || pi.receipt_email || '';
     const nom      = meta.client_nom   || 'Client';
     const adresse  = meta.client_adresse || '';
@@ -156,15 +249,10 @@ module.exports = async function handler(req, res) {
 </html>`;
 
     // ── 3. Envoyer l'email client via Resend ──────────────────
-    // ⚠️ L'adresse d'envoi doit être sur un domaine VÉRIFIÉ dans Resend.
-    //    Tant que louiserinceau.com n'est pas vérifié dans Resend, on
-    //    envoie depuis xv3foisrien.com (déjà vérifié) mais le nom affiché
-    //    est "Louise Rinceau". Une fois louiserinceau.com vérifié dans
-    //    Resend, remplace l'adresse par : Louise Rinceau <commandes@louiserinceau.com>
     if (email) {
       try {
         await resend.emails.send({
-          from:    'Louise Rinceau <commandes@xv3foisrien.com>',
+          from:    'Louise Rinceau <commandes@xv3foisrien.com>', // ⚠️ → louiserinceau.com quand vérifié
           to:      email,
           subject: '✦ Votre commande Louise Rinceau est confirmée',
           html:    emailHtml,
@@ -175,8 +263,6 @@ module.exports = async function handler(req, res) {
     }
 
     // ── 4. Marquer les bijoux épuisés sur le serveur ──────────
-    // On pointe vers louiserinceau.com (évite la redirection 301 de
-    // xv3foisrien.com qui casserait le POST).
     try {
       const soldIds = items.map(i => i.id);
 
@@ -190,10 +276,7 @@ module.exports = async function handler(req, res) {
       if (produits && produits.length > 0) {
         produits = produits.map(p => {
           if (!soldIds.includes(p.id)) return p;
-          // Les pièces AVEC stock sont décrémentées côté site (mark-sold.php) :
-          // on ne les touche pas ici pour éviter un double décompte.
           if (p.stock !== undefined && p.stock !== null) return p;
-          // Pièces uniques (sans stock) : filet de sécurité → marquer épuisé.
           return { ...p, epuise: true };
         });
         const saveRes = await fetch('https://louiserinceau.com/save-data.php', {
@@ -216,10 +299,27 @@ module.exports = async function handler(req, res) {
       console.error('[webhook] Stock update error:', stockErr.message);
     }
 
+    // ── 4bis. Code cadeau utilisé : décrémenter le solde de la carte ──
+    if (meta.gift_code && meta.gift_discount) {
+      try {
+        await fetch(SITE + '/gift-card.php', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Key': ADMIN_KEY },
+          body: JSON.stringify({
+            action: 'redeem',
+            code:   meta.gift_code,
+            amount: parseFloat(meta.gift_discount),
+            order:  pi.id,
+          }),
+        });
+        console.log('[webhook] Carte cadeau débitée:', meta.gift_code, meta.gift_discount);
+      } catch (e) { console.error('[webhook] gift redeem error:', e.message); }
+    }
+
     // ── 5. Notifier l'artisane ────────────────────────────────
     try {
       await resend.emails.send({
-        from:    'Louise Rinceau Bot <commandes@xv3foisrien.com>',
+        from:    'Louise Rinceau Bot <commandes@xv3foisrien.com>', // ⚠️ → louiserinceau.com quand vérifié
         to:      'contact@louiserinceau.com',
         subject: `🛒 Nouvelle commande — ${total} € — ${nom}`,
         html:    `<p><b>Nouvelle commande !</b></p>

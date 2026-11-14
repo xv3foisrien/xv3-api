@@ -3,6 +3,7 @@
 // Crée un PaymentIntent Stripe et renvoie le clientSecret.
 // Gère aussi :
 //   • l'achat d'une CARTE CADEAU (req.body.giftCard)
+//   • la réservation d'une INITIATION à l'atelier (req.body.workshop)
 //   • l'utilisation d'un CODE CADEAU sur une commande (req.body.giftCode)
 //     → la remise est TOUJOURS recalculée côté serveur (anti-fraude)
 // ════════════════════════════════════════
@@ -10,7 +11,7 @@
 const Stripe = require('stripe');
 
 const SITE     = 'https://louiserinceau.com';
-const ADMIN_KEY = 'xv3_secret_2026_changez_moi';
+const WORKSHOP_PRICE = 130; // € par personne — initiation « Créez votre bague »
 
 // Vérifie un code cadeau côté serveur et renvoie son solde réel.
 async function checkGiftCard(code) {
@@ -71,73 +72,19 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ clientSecret: pi.client_secret });
     }
 
-    // ═══════════════ CAS 2 : COMMANDE NORMALE ═══════════════
-    const { nom, email, adresse, codePostal, ville, items, subtotal, shipping, total, giftCode } = req.body;
-    if (!nom || !email || !items?.length || total === undefined) {
-      return res.status(400).json({ error: 'Données manquantes' });
-    }
-
-    const baseTotal = Math.round((parseFloat(total) || 0) * 100); // centimes
-    let payable     = baseTotal;
-    let giftInfo    = null;
-
-    // ── Code cadeau : remise recalculée côté serveur ──
-    if (giftCode) {
-      const gc = await checkGiftCard(giftCode);
-      if (!gc.valid) {
-        return res.status(400).json({ error: 'Code cadeau invalide ou épuisé', giftInvalid: true });
+    // ═══════════════ CAS 1 bis : INITIATION À L'ATELIER ═══════════════
+    if (req.body.workshop) {
+      const { nom, email } = req.body;
+      const w   = req.body.workshop || {};
+      const qty = Math.min(4, Math.max(1, parseInt(w.qty, 10) || 1));
+      if (!nom || !email) {
+        return res.status(400).json({ error: 'Nom et email requis' });
       }
-      const balanceCents  = Math.round(parseFloat(gc.balance) * 100);
-      const discountCents = Math.min(balanceCents, baseTotal); // ne dépasse jamais le total
-      payable  = baseTotal - discountCents;
-      giftInfo = { code: gc.code, discount: discountCents };
-    }
-
-    const description = items.map(i => `${i.nom}${i.taille ? ' (T.' + i.taille + ')' : ''}`).join(', ');
-    const metaBase = {
-      client_nom:    nom,
-      client_email:  email,
-      client_adresse: `${adresse}, ${codePostal} ${ville}`,
-      items_json: JSON.stringify(items.map(i => ({ id: i.id, nom: i.nom, prix: i.prix, taille: i.taille || null, cat: i.cat }))),
-      subtotal: String(subtotal),
-      shipping: String(shipping || 0),
-      total:    String(total),
-      source:   'louiserinceau.com',
-      commentaire: (req.body.commentaire || '').slice(0, 400),
-    };
-    if (giftInfo) {
-      metaBase.gift_code     = giftInfo.code;
-      metaBase.gift_discount = (giftInfo.discount / 100).toFixed(2);
-    }
-
-    // ── Commande entièrement couverte par la carte cadeau ──
-    // Stripe ne peut pas encaisser moins de 0,50 € : on signale au site
-    // de finaliser la commande gratuitement via /api/confirm-gift-order.
-    if (giftInfo && payable < 50) {
-      return res.status(200).json({
-        freeOrder: true,
-        giftCode:  giftInfo.code,
-        discount:  (giftInfo.discount / 100).toFixed(2),
-      });
-    }
-
-    const pi = await stripe.paymentIntents.create({
-      amount:   payable,
-      currency: 'eur',
-      description: 'Louise Rinceau — ' + description,
-      statement_descriptor_suffix: 'LOUISERINCEAU',
-      receipt_email: email,
-      metadata: metaBase,
-      automatic_payment_methods: { enabled: true },
-    });
-
-    return res.status(200).json({
-      clientSecret: pi.client_secret,
-      giftApplied:  giftInfo ? (giftInfo.discount / 100).toFixed(2) : null,
-    });
-
-  } catch (err) {
-    console.error('[create-payment-intent]', err.message);
-    return res.status(500).json({ error: err.message });
-  }
-};
+      // Les réservations peuvent être fermées depuis le back-office.
+      try {
+        const r = await fetch(SITE + '/save-data.php?t=' + Date.now());
+        const d = r.ok ? await r.json() : null;
+        if (d && d.settings && d.settings.atelierOuvert === false) {
+          return res.status(409).json({ error: 'Les réservations sont momentanément fermées', closed: true });
+        }
+      } catch (e) { /* site injoignable : on ne bloque pas la réservation */ }

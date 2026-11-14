@@ -8,7 +8,7 @@
 const { Resend } = require('resend');
 
 const SITE      = 'https://louiserinceau.com';
-const ADMIN_KEY = 'xv3_secret_2026_changez_moi';
+const ADMIN_KEY = process.env.ADMIN_KEY || ''; // clé partagée avec le site (identique à lr-config.php sur OVH)
 
 async function getData() {
   const r = await fetch(SITE + '/save-data.php', { headers: { 'Origin': SITE } });
@@ -37,7 +37,6 @@ module.exports = async function handler(req, res) {
   try {
     const data     = await getData();
     const produits = data.produits || [];
-    const settings = data.settings || {};
     const byId = Object.fromEntries(produits.map(p => [p.id, p]));
 
     // 1. Recalculer le sous-total à partir des PRIX RÉELS du serveur
@@ -47,9 +46,15 @@ module.exports = async function handler(req, res) {
       if (!p) return res.status(400).json({ error: 'Article introuvable : ' + it.id });
       subtotal += parseFloat(p.prix) || 0;
     }
-    const freeFrom = parseFloat(settings.shippingFree)  || 100;
-    const shipFlat = parseFloat(settings.shippingPrice) || 5;
-    const shipping = subtotal >= freeFrom ? 0 : shipFlat;
+    // Frais de port : mêmes zones et mêmes seuils que le site (app.js)
+    const pays = String(req.body.pays || 'FR').toUpperCase();
+    const ZONES = [
+      { c: ['FR'], price: 5, freeFrom: 150 },
+      { c: ['BE', 'LU', 'MC', 'CH'], price: 8, freeFrom: 150 },
+      { c: ['DE', 'ES', 'IT', 'NL', 'PT', 'AT'], price: 12, freeFrom: null },
+    ];
+    const zone = ZONES.find(z => z.c.includes(pays)) || { price: 15, freeFrom: null };
+    const shipping = (zone.freeFrom !== null && subtotal >= zone.freeFrom) ? 0 : zone.price;
     const realTotal = subtotal + shipping;
 
     // 2. Vérifier la carte cadeau (solde réel)
@@ -66,11 +71,17 @@ module.exports = async function handler(req, res) {
     }
 
     // 4. Débiter la carte du montant réel
-    await fetch(SITE + '/gift-card.php', {
+    const rd = await fetch(SITE + '/gift-card.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Admin-Key': ADMIN_KEY },
       body: JSON.stringify({ action: 'redeem', code: giftCode, amount: realTotal, order: 'gift-' + Date.now() }),
     });
+    const rdj = rd.ok ? await rd.json().catch(() => null) : null;
+    // Si la carte n'a pas pu être débitée, on n'offre pas la commande.
+    if (!rdj || !rdj.success || parseFloat(rdj.deducted) + 0.001 < realTotal) {
+      console.error('[confirm-gift-order] débit carte impossible, HTTP', rd.status);
+      return res.status(502).json({ error: 'La carte cadeau n\'a pas pu être débitée' });
+    }
 
     // 5. Marquer les pièces vendues (mêmes règles que le webhook)
     try {

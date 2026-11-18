@@ -88,3 +88,97 @@ module.exports = async function handler(req, res) {
           return res.status(409).json({ error: 'Les réservations sont momentanément fermées', closed: true });
         }
       } catch (e) { /* site injoignable : on ne bloque pas la réservation */ }
+
+      const amount = WORKSHOP_PRICE * qty; // prix fixé ici, jamais par le navigateur
+      const pi = await stripe.paymentIntents.create({
+        amount:   amount * 100,
+        currency: 'eur',
+        description: `Initiation « Créez votre bague » — ${qty} participant${qty > 1 ? 's' : ''}`,
+        statement_descriptor_suffix: 'LOUISERINCEAU',
+        receipt_email: email,
+        metadata: {
+          type:            'workshop_booking',
+          ws_qty:          String(qty),
+          ws_total:        String(amount),
+          ws_dispo:        String(w.dispo || '').slice(0, 400),
+          ws_tel:          String(w.tel || '').slice(0, 40),
+          ws_beneficiaire: String(w.beneficiaire || '').slice(0, 120),
+          client_nom:      nom,
+          client_email:    email,
+          source:          'louiserinceau.com',
+        },
+        automatic_payment_methods: { enabled: true },
+      });
+      return res.status(200).json({ clientSecret: pi.client_secret });
+    }
+
+    // ═══════════════ CAS 2 : COMMANDE NORMALE ═══════════════
+    const { nom, email, adresse, codePostal, ville, items, subtotal, shipping, total, giftCode } = req.body;
+    if (!nom || !email || !items?.length || total === undefined) {
+      return res.status(400).json({ error: 'Données manquantes' });
+    }
+
+    const baseTotal = Math.round((parseFloat(total) || 0) * 100); // centimes
+    let payable     = baseTotal;
+    let giftInfo    = null;
+
+    // ── Code cadeau : remise recalculée côté serveur ──
+    if (giftCode) {
+      const gc = await checkGiftCard(giftCode);
+      if (!gc.valid) {
+        return res.status(400).json({ error: 'Code cadeau invalide ou épuisé', giftInvalid: true });
+      }
+      const balanceCents  = Math.round(parseFloat(gc.balance) * 100);
+      const discountCents = Math.min(balanceCents, baseTotal); // ne dépasse jamais le total
+      payable  = baseTotal - discountCents;
+      giftInfo = { code: gc.code, discount: discountCents };
+    }
+
+    const description = items.map(i => `${i.nom}${i.taille ? ' (T.' + i.taille + ')' : ''}`).join(', ');
+    const metaBase = {
+      client_nom:    nom,
+      client_email:  email,
+      client_adresse: `${adresse}, ${codePostal} ${ville}`,
+      items_json: JSON.stringify(items.map(i => ({ id: i.id, nom: i.nom, prix: i.prix, taille: i.taille || null, cat: i.cat }))),
+      subtotal: String(subtotal),
+      shipping: String(shipping || 0),
+      total:    String(total),
+      source:   'louiserinceau.com',
+      commentaire: (req.body.commentaire || '').slice(0, 400),
+    };
+    if (giftInfo) {
+      metaBase.gift_code     = giftInfo.code;
+      metaBase.gift_discount = (giftInfo.discount / 100).toFixed(2);
+    }
+
+    // ── Commande entièrement couverte par la carte cadeau ──
+    // Stripe ne peut pas encaisser moins de 0,50 € : on signale au site
+    // de finaliser la commande gratuitement via /api/confirm-gift-order.
+    if (giftInfo && payable < 50) {
+      return res.status(200).json({
+        freeOrder: true,
+        giftCode:  giftInfo.code,
+        discount:  (giftInfo.discount / 100).toFixed(2),
+      });
+    }
+
+    const pi = await stripe.paymentIntents.create({
+      amount:   payable,
+      currency: 'eur',
+      description: 'Louise Rinceau — ' + description,
+      statement_descriptor_suffix: 'LOUISERINCEAU',
+      receipt_email: email,
+      metadata: metaBase,
+      automatic_payment_methods: { enabled: true },
+    });
+
+    return res.status(200).json({
+      clientSecret: pi.client_secret,
+      giftApplied:  giftInfo ? (giftInfo.discount / 100).toFixed(2) : null,
+    });
+
+  } catch (err) {
+    console.error('[create-payment-intent]', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+};

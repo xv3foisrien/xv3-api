@@ -57,7 +57,6 @@ module.exports = async function handler(req, res) {
         amount:   amount * 100,
         currency: 'eur',
         description: `Carte cadeau Louise Rinceau — ${amount} €`,
-        statement_descriptor_suffix: 'LOUISERINCEAU',
         receipt_email: email,
         metadata: {
           type:         'giftcard_purchase',
@@ -94,7 +93,6 @@ module.exports = async function handler(req, res) {
         amount:   amount * 100,
         currency: 'eur',
         description: `Initiation « Créez votre bague » — ${qty} participant${qty > 1 ? 's' : ''}`,
-        statement_descriptor_suffix: 'LOUISERINCEAU',
         receipt_email: email,
         metadata: {
           type:            'workshop_booking',
@@ -166,7 +164,6 @@ module.exports = async function handler(req, res) {
       amount:   payable,
       currency: 'eur',
       description: 'Louise Rinceau — ' + description,
-      statement_descriptor_suffix: 'LOUISERINCEAU',
       receipt_email: email,
       metadata: metaBase,
       automatic_payment_methods: { enabled: true },

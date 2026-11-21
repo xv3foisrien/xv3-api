@@ -367,15 +367,34 @@ module.exports = async function handler(req, res) {
     // ── 3. Envoyer l'email client via Resend ──────────────────
     if (email) {
       try {
-        await resend.emails.send({
+        const { error: mailE } = await resend.emails.send({
           from:    'Louise Rinceau <commandes@louiserinceau.com>',
           to:      email,
           subject: '✦ Votre commande Louise Rinceau est confirmée',
           html:    emailHtml,
         });
+        if (mailE) console.error('[webhook] Email client refusé par Resend:', JSON.stringify(mailE));
       } catch (mailErr) {
         console.error('[webhook] Resend error:', mailErr.message);
       }
+    }
+
+    // ── 3bis. Notifier l'artisane TOUT DE SUITE (avant les étapes lentes) ──
+    try {
+      const { error: notifErr } = await resend.emails.send({
+        from:    'Louise Rinceau Bot <commandes@louiserinceau.com>',
+        to:      'contact@louiserinceau.com',
+        subject: `🛒 Nouvelle commande — ${total} € — ${nom}`,
+        html:    `<p><b>Nouvelle commande !</b></p>
+                  <p><b>Client :</b> ${esc(nom)} (${esc(email)})</p>
+                  <p><b>Adresse :</b> ${adresse}</p>
+                  <p><b>Montant :</b> ${total} €</p>
+                  <p><b>Articles :</b><br>${items.map(i => `— ${i.nom}${i.taille ? ' T.' + i.taille : ''} · ${i.prix}€`).join('<br>')}</p>
+                  <p><b>PaymentIntent :</b> ${pi.id}</p>`,
+      });
+      if (notifErr) console.error('[webhook] Notif artisane refusée par Resend:', JSON.stringify(notifErr));
+    } catch (mailErr) {
+      console.error('[webhook] Notif artisane error:', mailErr.message);
     }
 
     // ── 4. Marquer les bijoux épuisés sur le serveur ──────────
@@ -433,23 +452,6 @@ module.exports = async function handler(req, res) {
         });
         console.log('[webhook] Carte cadeau débitée:', meta.gift_code, meta.gift_discount);
       } catch (e) { console.error('[webhook] gift redeem error:', e.message); }
-    }
-
-    // ── 5. Notifier l'artisane ────────────────────────────────
-    try {
-      await resend.emails.send({
-        from:    'Louise Rinceau Bot <commandes@louiserinceau.com>',
-        to:      'contact@louiserinceau.com',
-        subject: `🛒 Nouvelle commande — ${total} € — ${nom}`,
-        html:    `<p><b>Nouvelle commande !</b></p>
-                  <p><b>Client :</b> ${esc(nom)} (${esc(email)})</p>
-                  <p><b>Adresse :</b> ${adresse}</p>
-                  <p><b>Montant :</b> ${total} €</p>
-                  <p><b>Articles :</b><br>${items.map(i => `— ${i.nom}${i.taille ? ' T.' + i.taille : ''} · ${i.prix}€`).join('<br>')}</p>
-                  <p><b>PaymentIntent :</b> ${pi.id}</p>`,
-      });
-    } catch (mailErr) {
-      console.error('[webhook] Notif artisane error:', mailErr.message);
     }
   }
 
